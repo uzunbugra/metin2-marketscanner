@@ -1,17 +1,26 @@
+import subprocess
+import os
+import sys
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 from .routers import market
 from .database import engine, Base
+
+# Load environment variables
+load_dotenv()
 
 # Create tables if they don't exist
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Metin2 Market Analysis API")
 
-# CORS config - allow requests from localhost:3000 (Next.js)
+# CORS config
+origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "*"], 
+    allow_origins=origins, 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -43,7 +52,8 @@ def trigger_scrape(request: ScrapeRequest):
         
         # Run in background or wait? Waiting might timeout if it takes long.
         # For now, let's wait to ensure it works.
-        result = subprocess.run(["python", scraper_path], env=env, capture_output=True, text=True)
+        # Use sys.executable to ensure the same python environment is used
+        result = subprocess.run([sys.executable, scraper_path], env=env, capture_output=True, text=True)
         
         if result.returncode == 0:
             return {"message": f"Scraped successfully for '{request.query}'", "output": result.stdout}
