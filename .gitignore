@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+venv/
+env/
+.venv/
+.idea/
+.vscode/
+
+# Node/Next.js
+node_modules/
+.next/
+out/
+build/
+dist/
+.DS_Store
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Database
+data/*.db
+data/*.sqlite
+
+# Local dev
+*.local
+
+# Temp
+tmp/
+temp/
