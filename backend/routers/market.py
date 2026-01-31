@@ -48,21 +48,21 @@ def get_top_items(db: Session = Depends(database.get_db)):
 
 @router.get("/stats/price-history")
 def get_price_history(item_name: str, db: Session = Depends(database.get_db)):
-    """Returns the average price (in Yang) over time for a specific item."""
-    from sqlalchemy import func
+    """Returns the recorded price history for a specific item."""
+    history = db.query(models.PriceHistory)\
+        .filter(models.PriceHistory.item_name == item_name)\
+        .order_by(models.PriceHistory.timestamp.asc())\
+        .all()
     
-    # Group by date (simplistic approach for SQLite)
-    # Note: For production, you'd want more robust date handling based on DB type
-    results = db.query(
-        func.date(models.Listing.seen_at).label("date"), 
-        func.avg(models.Listing.total_price_yang).label("avg_price")
-    ).join(models.Item)\
-    .filter(models.Item.name == item_name)\
-    .group_by(func.date(models.Listing.seen_at))\
-    .order_by(func.date(models.Listing.seen_at))\
-    .all()
-    
-    return [{"date": str(row.date), "avg_price": row.avg_price} for row in results]
+    return [
+        {
+            "timestamp": h.timestamp, 
+            "avg_unit_price": h.avg_unit_price, 
+            "min_unit_price": h.min_unit_price,
+            "total_listings": h.total_listings
+        } 
+        for h in history
+    ]
 
 @router.get("/servers")
 def get_servers(db: Session = Depends(database.get_db)):

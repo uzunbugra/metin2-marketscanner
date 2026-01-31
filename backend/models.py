@@ -39,3 +39,12 @@ class ListingBonus(Base):
     bonus_value = Column(String)
 
     listing = relationship("Listing", back_populates="bonuses")
+
+class PriceHistory(Base):
+    __tablename__ = "price_history"
+    id = Column(Integer, primary_key=True, index=True)
+    item_name = Column(String, index=True)
+    avg_unit_price = Column(BigInteger)
+    min_unit_price = Column(BigInteger)
+    total_listings = Column(Integer)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)

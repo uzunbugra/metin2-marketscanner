@@ -37,6 +37,18 @@ CREATE TABLE IF NOT EXISTS listing_bonuses (
     FOREIGN KEY(listing_id) REFERENCES listings(id)
 );
 
+-- Price History (Market Analysis)
+CREATE TABLE IF NOT EXISTS price_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_name TEXT NOT NULL,
+    avg_unit_price BIGINT,
+    min_unit_price BIGINT,
+    total_listings INTEGER,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes for performance
 CREATE INDEX idx_listings_item_server ON listings(item_id, server_id);
 CREATE INDEX idx_listings_seen_at ON listings(seen_at);
+CREATE INDEX idx_price_history_item ON price_history(item_name);
+CREATE INDEX idx_price_history_timestamp ON price_history(timestamp);
