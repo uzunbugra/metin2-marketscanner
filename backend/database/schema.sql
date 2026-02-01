@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS price_history (
 );
 
 -- Indexes for performance
-CREATE INDEX idx_listings_item_server ON listings(item_id, server_id);
-CREATE INDEX idx_listings_seen_at ON listings(seen_at);
-CREATE INDEX idx_price_history_item ON price_history(item_name);
-CREATE INDEX idx_price_history_timestamp ON price_history(timestamp);
+CREATE INDEX IF NOT EXISTS idx_listings_item_server ON listings(item_id, server_id);
+CREATE INDEX IF NOT EXISTS idx_listings_seen_at ON listings(seen_at);
+CREATE INDEX IF NOT EXISTS idx_price_history_item ON price_history(item_name);
+CREATE INDEX IF NOT EXISTS idx_price_history_timestamp ON price_history(timestamp);

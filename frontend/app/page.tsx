@@ -18,6 +18,14 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [scraping, setScraping] = useState(false);
+  const [upgradeFilter, setUpgradeFilter] = useState<string>("ALL");
+
+  // Helper to extract plus value from item name
+  const getPlusValue = (name: string): number | null => {
+    // Looks for + followed by digits, ideally at the end or before a bracket
+    const match = name.match(/\+(\d+)/);
+    return match ? parseInt(match[1]) : null;
+  };
 
   const fetchData = async (filter?: string | null) => {
       setLoading(true);
@@ -66,6 +74,7 @@ export default function Home() {
   const clearFilter = () => {
       setActiveFilter(null);
       setSearchQuery("");
+      setUpgradeFilter("ALL");
       fetchData(null);
   };
 
@@ -80,46 +89,85 @@ export default function Home() {
       }
   };
 
+  // Filter listings based on upgrade level
+  const filteredListings = listings.filter(item => {
+      const plus = getPlusValue(item.item.name);
+      
+      if (upgradeFilter === "ALL") return true;
+      if (upgradeFilter === "MATERIAL") return plus === null;
+      if (upgradeFilter === "0-6") return plus !== null && plus >= 0 && plus <= 6;
+      if (upgradeFilter === "7-8") return plus !== null && plus >= 7 && plus <= 8;
+      if (upgradeFilter === "9") return plus === 9;
+      if (upgradeFilter === "10+") return plus !== null && plus >= 10;
+      return true;
+  });
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 font-sans">
       <Navbar />
       
       <main className="container mx-auto p-6 space-y-8">
         {/* Search & Scrape Control */}
-        <div className="bg-slate-800 p-4 rounded-lg border border-slate-700 flex flex-col md:flex-row gap-4 items-center justify-between">
-            <div className="flex-1 w-full">
-                <h3 className="text-lg font-semibold text-white mb-2">Track New Item</h3>
-                <div className="flex gap-2">
-                    <input 
-                        type="text" 
-                        placeholder="Enter item name (e.g. Kılıç, Dolunay)" 
-                        className="flex-1 bg-slate-900 border border-slate-600 rounded px-4 py-2 text-white focus:outline-none focus:border-blue-500"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleScrape()}
-                    />
-                    <button 
-                        onClick={handleScrape}
-                        disabled={scraping || !searchQuery}
-                        className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2 rounded flex items-center gap-2 font-medium transition-colors"
-                    >
-                        {scraping ? <RefreshCw className="animate-spin" size={20}/> : <Search size={20}/>}
-                        {scraping ? "Scanning..." : "Scan Market"}
-                    </button>
+        <div className="bg-slate-800 p-4 rounded-lg border border-slate-700 flex flex-col gap-4">
+            <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+                <div className="flex-1 w-full">
+                    <h3 className="text-lg font-semibold text-white mb-2">Track New Item</h3>
+                    <div className="flex gap-2">
+                        <input 
+                            type="text" 
+                            placeholder="Enter item name (e.g. Kılıç, Dolunay)" 
+                            className="flex-1 bg-slate-900 border border-slate-600 rounded px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleScrape()}
+                        />
+                        <button 
+                            onClick={handleScrape}
+                            disabled={scraping || !searchQuery}
+                            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-6 py-2 rounded flex items-center gap-2 font-medium transition-colors"
+                        >
+                            {scraping ? <RefreshCw className="animate-spin" size={20}/> : <Search size={20}/>}
+                            {scraping ? "Scanning..." : "Scan Market"}
+                        </button>
+                    </div>
                 </div>
-                <p className="text-xs text-slate-500 mt-2">
-                    Scraping takes about 10-20 seconds. Results will appear in the table below.
-                </p>
+                
+                <div className="flex items-center gap-4 text-slate-400 text-sm self-end mb-2">
+                    <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                        Marmara Server
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                        Live Scraper
+                    </div>
+                </div>
             </div>
-            
-            <div className="flex items-center gap-4 text-slate-400 text-sm">
-                <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                    Marmara Server
-                </div>
-                <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                    Live Scraper
+
+            {/* Upgrade Level Filter */}
+            <div className="border-t border-slate-700 pt-4">
+                <span className="text-sm text-slate-400 mr-4">Filter by Level:</span>
+                <div className="inline-flex flex-wrap gap-2">
+                    {[
+                        { id: "ALL", label: "All Items" },
+                        { id: "MATERIAL", label: "Materials (No +)" },
+                        { id: "0-6", label: "+0 to +6" },
+                        { id: "7-8", label: "+7 to +8" },
+                        { id: "9", label: "+9 Only" },
+                        { id: "10+", label: "+10 & Higher" }
+                    ].map(filter => (
+                        <button
+                            key={filter.id}
+                            onClick={() => setUpgradeFilter(filter.id)}
+                            className={`px-3 py-1 rounded text-sm transition-colors ${
+                                upgradeFilter === filter.id 
+                                ? "bg-blue-600 text-white font-medium" 
+                                : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                            }`}
+                        >
+                            {filter.label}
+                        </button>
+                    ))}
                 </div>
             </div>
         </div>
@@ -128,9 +176,9 @@ export default function Home() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <StatsCard 
             title="Total Listings" 
-            value={listings.length} 
+            value={filteredListings.length} 
             icon={ShoppingCart} 
-            trend="+12% from yesterday"
+            trend={upgradeFilter !== "ALL" ? "Filtered View" : "+12% from yesterday"}
           />
           <StatsCard 
             title="Active Servers" 
@@ -185,7 +233,7 @@ export default function Home() {
             {loading ? (
                <div className="text-center py-10 text-slate-500">Loading market data...</div>
             ) : (
-               <ListingTable listings={listings} />
+               <ListingTable listings={filteredListings} />
             )}
           </div>
 

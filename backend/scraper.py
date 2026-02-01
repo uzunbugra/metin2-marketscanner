@@ -133,163 +133,209 @@ def export_history_to_json(item_name, cursor):
     except Exception as e:
         print(f"Error exporting JSON for {item_name}: {e}")
 
+# Common item name mappings (Short/Slang -> Full Game Name)
+ITEM_NAME_MAPPINGS = {
+    "dolunay": "Dolunay Kılıcı",
+    "kdp": "Kırmızı Demir Pala",
+    "syk": "Siyah Yuvarlak Kalkan",
+    "gby": "Geyik Boynuzu Yay",
+    "zehir": "Zehir Kılıcı",
+    "kin": "Kin Kılıcı",
+    "siyah çelik": "Siyah Çelik Zırh",
+    "mavi çelik": "Mavi Çelik Zırh",
+    "beşgen": "Beşgen Kalkan",
+    "orkide": "Orkide Çan",
+    "aslan ağzı": "Aslan Ağzı Kalkan",
+    "sahine": "Şahin Kalkan",
+    "kaplan": "Kaplan Kalkan",
+    "abonoz": "Abonoz Küpe",
+    "cennet": "Cennetin Gözü Kolye"
+}
+
 async def scrape_store(search_query=None):
     if not search_query:
         search_query = os.environ.get("SEARCH_QUERY")
+    
+    if not search_query:
+        print("No search query provided.")
+        return
+
+    # Generate list of queries to run
+    queries_to_run = []
+    
+    # Check if query has a plus sign (specific level search)
+    if "+" in search_query:
+        queries_to_run.append(search_query)
+    else:
+        # It's a generic search, let's expand it
+        # 1. Add the base name itself (for materials/stones that don't have +)
+        base_name = ITEM_NAME_MAPPINGS.get(search_query.lower(), search_query)
+        queries_to_run.append(base_name)
         
-    print(f"Starting scrape for '{search_query}' at {URL}...")
+        # 2. Add +0 to +9 iterations for equipment
+        # We assume if it's a generic search for equipment, user wants all levels
+        print(f"Detected generic search '{search_query}'. Expanding to +0...+9 scan.")
+        for i in range(10):
+            queries_to_run.append(f"{base_name}+{i}")
+
+    print(f"Planned search queue: {queries_to_run}")
     
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
+        # Create context once
+        context = await browser.new_context()
+        page = await context.new_page()
         
         try:
+            # Go to store once
             await page.goto(URL, timeout=60000)
             await page.wait_for_load_state("networkidle")
-            await asyncio.sleep(2)
-
-            # Select Server (Marmara)
+            
+            # Select Server (Marmara) - Do this once at the start
             try:
                 selects = await page.query_selector_all("select")
                 if selects:
                     await page.select_option("select", value="409")
                     await page.wait_for_load_state("networkidle")
                     await asyncio.sleep(2)
-                else:
-                    marmara_link = page.get_by_text("Marmara")
-                    if await marmara_link.count() > 0:
-                        await marmara_link.first.click(force=True)
-                        await page.wait_for_load_state("networkidle")
-                        await asyncio.sleep(2)
             except Exception as e:
-                print(f"Error selecting Marmara: {e}")
+                print(f"Error selecting server: {e}")
 
-            # Search
-            if search_query:
+            # Iterate through all generated queries
+            for current_query in queries_to_run:
+                print(f"\n>>> Scraper processing: '{current_query}'")
+                
+                # Search
                 try:
                     search_input = page.locator("#item-search-input")
-                    if await search_input.is_visible():
-                        await search_input.click()
-                        await search_input.fill("")
-                        await asyncio.sleep(0.5)
-                        await search_input.type(search_query, delay=100)
-                        await asyncio.sleep(0.5)
-                        await search_input.press("Enter")
-                        await page.wait_for_load_state("networkidle")
-                        await asyncio.sleep(3)
-                except Exception as e:
-                    print(f"Error searching: {e}")
-
-            # Pagination Loop
-            all_listings = []
-            page_num = 1
-            
-            while True:
-                print(f"--- Page {page_num} ---")
-                try:
-                    await page.wait_for_selector("tbody tr", timeout=10000)
-                except:
-                    print("No rows found.")
-                    if page_num == 1: break
-                
-                content = await page.content()
-                soup = BeautifulSoup(content, 'html.parser')
-                rows = soup.select("tbody tr")
-                
-                print(f"Rows: {len(rows)}")
-                
-                for row in rows:
-                    try:
-                        cols = row.find_all('td')
-                        if len(cols) < 5: continue
-                        
-                        info_col = cols[1]
-                        name_div = info_col.find('div', class_=lambda x: x and 'font-medium' in x)
-                        item_name = ""
-                        special_bonuses = []
-                        
-                        if name_div:
-                            name_spans = name_div.find_all('span')
-                            special_bonuses = [s.get_text(strip=True) for s in name_spans]
-                            for s in name_spans: s.extract()
-                            item_name = name_div.get_text(strip=True)
-                        else:
-                            item_name = info_col.get_text(strip=True)
-                        
-                        bonus_div = info_col.find('div', class_=lambda x: x and 'text-xs' in x and 'text-gray-400' in x)
-                        bonuses = []
-                        if bonus_div:
-                            bonuses = [s.get_text(strip=True) for s in bonus_div.find_all('span')]
-                        bonuses.extend(special_bonuses)
-                        
-                        quantity = parse_price(cols[2].get_text(strip=True)) or 1
-                        yang = parse_price(cols[3].get_text(strip=True))
-                        won = parse_price(cols[4].get_text(strip=True))
-                        seller = cols[5].get_text(strip=True) if len(cols) > 5 else "Unknown"
-                        
-                        total_yang = (won * 100_000_000) + yang
-                        unit_price = total_yang / quantity
-                        
-                        all_listings.append({
-                            "item_name": item_name,
-                            "seller": seller,
-                            "quantity": quantity,
-                            "price_won": won,
-                            "price_yang": yang,
-                            "total_yang": total_yang,
-                            "unit_price": unit_price,
-                            "bonuses": bonuses
-                        })
-                    except Exception:
-                        continue
-                
-                # Next Page
-                next_button = None
-                candidates = page.locator("button:has-text('>')")
-                if await candidates.count() > 0: next_button = candidates.first
-                elif await page.locator("button:has-text('Sonraki')").count() > 0: next_button = page.locator("button:has-text('Sonraki')").first
-                elif await page.locator("button:has-text('Next')").count() > 0: next_button = page.locator("button:has-text('Next')").first
-                
-                if next_button and await next_button.is_visible() and not await next_button.is_disabled():
-                    await next_button.click()
+                    # Ensure input is clear
+                    await search_input.click()
+                    await search_input.fill("")
+                    await asyncio.sleep(0.5)
+                    await search_input.type(current_query, delay=100)
+                    await asyncio.sleep(0.5)
+                    await search_input.press("Enter")
                     await page.wait_for_load_state("networkidle")
-                    await asyncio.sleep(random.uniform(1, 3))
-                    page_num += 1
-                else:
-                    break
-            
-            # Deduplicate & Sort
-            unique_listings = []
-            seen = set()
-            for item in all_listings:
-                sig = (item['item_name'], item['seller'], item['total_yang'], item['quantity'])
-                if sig not in seen:
-                    seen.add(sig)
-                    unique_listings.append(item)
-            unique_listings.sort(key=lambda x: x['unit_price'])
-            
-            await save_to_db(unique_listings, search_query)
-            
-            # ANALYZE AFTER SAVE
-            if search_query:
-                await analyze_market(search_query)
-            else:
-                # If no specific query, we might want to analyze all updated items
-                # For now, let's skip or analyze distinct items found
-                found_names = set(i['item_name'] for i in unique_listings)
-                for name in found_names:
-                    await analyze_market(name)
-            
+                    await asyncio.sleep(2) # Give a bit more time for results
+                except Exception as e:
+                    print(f"Error searching for {current_query}: {e}")
+                    continue
+
+                # Pagination Loop for Current Query
+                all_listings = []
+                page_num = 1
+                
+                while True:
+                    print(f"   Page {page_num} for {current_query}")
+                    try:
+                        # Check if no results
+                        no_data = page.get_by_text("No data available in table")
+                        if await no_data.count() > 0 and await no_data.is_visible():
+                             print("   No results found.")
+                             break
+                        
+                        await page.wait_for_selector("tbody tr", timeout=5000)
+                    except:
+                        print("   No rows found or timeout.")
+                        break
+                    
+                    content = await page.content()
+                    soup = BeautifulSoup(content, 'html.parser')
+                    rows = soup.select("tbody tr")
+                    
+                    if not rows or (len(rows) == 1 and "No data" in rows[0].text):
+                        print("   No data rows.")
+                        break
+
+                    print(f"   Found {len(rows)} rows.")
+                    
+                    for row in rows:
+                        try:
+                            cols = row.find_all('td')
+                            if len(cols) < 5: continue
+                            
+                            info_col = cols[1]
+                            name_div = info_col.find('div', class_=lambda x: x and 'font-medium' in x)
+                            item_name = ""
+                            special_bonuses = []
+                            
+                            if name_div:
+                                name_spans = name_div.find_all('span')
+                                special_bonuses = [s.get_text(strip=True) for s in name_spans]
+                                for s in name_spans: s.extract()
+                                item_name = name_div.get_text(strip=True)
+                            else:
+                                item_name = info_col.get_text(strip=True)
+                            
+                            # Only add if it actually matches our query loosely
+                            # (Prevents generic 'Dolunay' search from polluting specific '+9' buckets if site fuzzy matches)
+                            # But since we iterate, we trust the scraper's query context.
+                            
+                            bonus_div = info_col.find('div', class_=lambda x: x and 'text-xs' in x and 'text-gray-400' in x)
+                            bonuses = []
+                            if bonus_div:
+                                bonuses = [s.get_text(strip=True) for s in bonus_div.find_all('span')]
+                            bonuses.extend(special_bonuses)
+                            
+                            quantity = parse_price(cols[2].get_text(strip=True)) or 1
+                            yang = parse_price(cols[3].get_text(strip=True))
+                            won = parse_price(cols[4].get_text(strip=True))
+                            seller = cols[5].get_text(strip=True) if len(cols) > 5 else "Unknown"
+                            
+                            total_yang = (won * 100_000_000) + yang
+                            unit_price = total_yang / quantity
+                            
+                            all_listings.append({
+                                "item_name": item_name,
+                                "seller": seller,
+                                "quantity": quantity,
+                                "price_won": won,
+                                "price_yang": yang,
+                                "total_yang": total_yang,
+                                "unit_price": unit_price,
+                                "bonuses": bonuses
+                            })
+                        except Exception:
+                            continue
+                    
+                    # Next Page
+                    next_button = None
+                    candidates = page.locator("button:has-text('>')")
+                    if await candidates.count() > 0: next_button = candidates.first
+                    
+                    if next_button and await next_button.is_visible() and not await next_button.is_disabled():
+                        await next_button.click()
+                        await page.wait_for_load_state("networkidle")
+                        await asyncio.sleep(1)
+                        page_num += 1
+                    else:
+                        break
+                
+                # Save results for this specific query immediately
+                if all_listings:
+                    unique_listings = []
+                    seen = set()
+                    for item in all_listings:
+                        sig = (item['item_name'], item['seller'], item['total_yang'], item['quantity'])
+                        if sig not in seen:
+                            seen.add(sig)
+                            unique_listings.append(item)
+                    
+                    await save_to_db(unique_listings, current_query)
+                    await analyze_market(current_query) # Create history point for this specific item/+
+
         except Exception as e:
-            print(f"Scrape error: {e}")
+            print(f"Scrape session error: {e}")
         finally:
             await browser.close()
 
 async def save_to_db(listings, search_query):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    server_id = 409 # Marmara hardcoded for now or fetch
+    # Ensure server exists and get its ID
     cursor.execute("INSERT OR IGNORE INTO servers (name) VALUES (?)", ("Marmara",))
+    cursor.execute("SELECT id FROM servers WHERE name=?", ("Marmara",))
+    server_id = cursor.fetchone()[0]
     
     if search_query:
          cursor.execute("DELETE FROM listings WHERE item_id IN (SELECT id FROM items WHERE name LIKE ?)", (f"%{search_query}%",))
