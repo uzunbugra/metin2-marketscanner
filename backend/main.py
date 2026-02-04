@@ -16,11 +16,10 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Metin2 Market Analysis API")
 
 # CORS config
-origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
-
+# Allow all for local dev to avoid network issues
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins, 
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
