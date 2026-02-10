@@ -5,12 +5,14 @@ import Navbar from '@/components/Navbar';
 import StatsCard from '@/components/StatsCard';
 import ListingTable from '@/components/ListingTable';
 import PriceChart from '@/components/PriceChart';
-import { getListings, getTopItems, getPriceHistory, triggerScrape, Listing, PricePoint } from '@/lib/api';
-import { TrendingUp, ShoppingCart, Server, LineChart, Search, RefreshCw } from 'lucide-react';
+import { getListings, getTopItems, getPriceHistory, triggerScrape, getServers, Listing, PricePoint } from '@/lib/api';
+import { TrendingUp, ShoppingCart, Server, LineChart, Search, RefreshCw, ChevronDown } from 'lucide-react';
 
 export default function Home() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [topItems, setTopItems] = useState<{name: string, count: number}[]>([]);
+  const [servers, setServers] = useState<{id: number, name: string}[]>([]);
+  const [selectedServer, setSelectedServer] = useState<string>("Marmara");
   const [priceHistory, setPriceHistory] = useState<PricePoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -27,16 +29,19 @@ export default function Home() {
     return match ? parseInt(match[1]) : null;
   };
 
-  const fetchData = async (filter?: string | null) => {
+  const fetchData = async (filter?: string | null, serverName?: string) => {
       setLoading(true);
       setErrorMsg(null);
+      const currentServer = serverName || selectedServer;
       try {
-        const [listingsData, topItemsData] = await Promise.all([
-          getListings(filter || undefined),
-          getTopItems()
+        const [listingsData, topItemsData, serversData] = await Promise.all([
+          getListings(filter || undefined, currentServer),
+          getTopItems(),
+          getServers()
         ]);
         setListings(listingsData);
         setTopItems(topItemsData);
+        setServers(serversData);
 
         if (topItemsData.length > 0 && !selectedItemForChart) {
             setSelectedItemForChart(topItemsData[0].name);
@@ -52,17 +57,17 @@ export default function Home() {
   };
 
   useEffect(() => {
-    fetchData(null);
-  }, []);
+    fetchData(null, selectedServer);
+  }, [selectedServer]);
 
   const handleScrape = async () => {
       if (!searchQuery) return;
       setScraping(true);
       try {
-          await triggerScrape(searchQuery);
+          await triggerScrape(searchQuery, selectedServer);
           // Set filter to the searched item and refresh
           setActiveFilter(searchQuery);
-          await fetchData(searchQuery);
+          await fetchData(searchQuery, selectedServer);
           // Don't clear searchQuery so user sees what they searched
       } catch (e: any) {
           alert("Scrape failed: " + e.message);
@@ -180,11 +185,33 @@ export default function Home() {
             icon={ShoppingCart} 
             trend={upgradeFilter !== "ALL" ? "Filtered View" : "+12% from yesterday"}
           />
-          <StatsCard 
-            title="Active Servers" 
-            value="1" 
-            icon={Server} 
-          />
+          
+          <div className="bg-slate-800 p-6 rounded-lg border border-slate-700 relative group">
+            <div className="flex items-center justify-between mb-4">
+                <h3 className="text-slate-400 font-medium">Selected Server</h3>
+                <Server className="text-blue-500" size={20} />
+            </div>
+            <div className="relative">
+                <select 
+                    value={selectedServer}
+                    onChange={(e) => setSelectedServer(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-white font-bold appearance-none focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                    {servers.map(server => (
+                        <option key={server.id} value={server.name}>
+                            {server.name}
+                        </option>
+                    ))}
+                    {servers.length === 0 && <option value="Marmara">Marmara</option>}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" size={16} />
+            </div>
+            <div className="text-xs text-blue-500 mt-2 flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                Switching filters results automatically
+            </div>
+          </div>
+
           <StatsCard 
             title="Most Traded Item" 
             value={topItems[0]?.name || "N/A"} 

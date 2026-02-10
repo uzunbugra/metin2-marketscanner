@@ -1,6 +1,7 @@
 import subprocess
 import os
 import sys
+from typing import Optional
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -37,14 +38,16 @@ from pydantic import BaseModel
 
 class ScrapeRequest(BaseModel):
     query: str
+    server: Optional[str] = "Marmara"
 
 @app.post("/scrape")
 def trigger_scrape(request: ScrapeRequest):
-    """Triggers the scraper for a specific item query."""
+    """Triggers the scraper for a specific item query and server."""
     try:
         # Run scraper as a subprocess
         env = os.environ.copy()
         env["SEARCH_QUERY"] = request.query
+        env["SERVER_NAME"] = request.server
         
         # Path to scraper
         scraper_path = os.path.join(os.path.dirname(__file__), "scraper.py")

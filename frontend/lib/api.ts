@@ -43,13 +43,19 @@ export interface Listing {
   }[];
 }
 
-export const getListings = async (itemName?: string) => {
+export const getListings = async (itemName?: string, server?: string) => {
   const params: any = {};
   if (itemName) params.item_name = itemName;
+  if (server) params.server = server;
   
   const response = await api.get<Listing[]>('/market/listings', { params });
   return response.data;
 };
+
+export const getServers = async () => {
+    const response = await api.get<{id: number, name: string}[]>('/market/servers');
+    return response.data;
+}
 
 export const getTopItems = async () => {
     const response = await api.get<{name: string, count: number}[]>('/market/stats/top-items');
@@ -68,7 +74,7 @@ export const getPriceHistory = async (itemName: string) => {
     return response.data;
 }
 
-export const triggerScrape = async (query: string) => {
-    const response = await api.post<{ message: string, output?: string, error?: string }>('/scrape', { query });
+export const triggerScrape = async (query: string, server: string) => {
+    const response = await api.post<{ message: string, output?: string, error?: string }>('/scrape', { query, server });
     return response.data;
 }
